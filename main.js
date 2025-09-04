@@ -47,6 +47,17 @@ function challengeFromVerifier(v) {
   return base64urlencode(crypto.createHash("sha256").update(v).digest())
 }
 
+function randomState(len = 12) {
+  // Node 16/18 compatible: base64 -> base64url, strip padding, slice
+  const bytes = crypto.randomBytes(Math.ceil((len * 3) / 4))
+  return bytes
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "")
+    .slice(0, len)
+}
+
 // Minimal JWT decode (no signature verification)
 function decodeIdToken(idToken) {
   try {
@@ -186,6 +197,7 @@ async function startLogin() {
   const v = generateVerifier()
   const codeVerifier = v
   const codeChallenge = challengeFromVerifier(v)
+  const state = randomState()
 
   // Start single fixed-port server, no extra listeners anywhere else
   const { waitForCode, close } = listenForCallback()
@@ -198,7 +210,7 @@ async function startLogin() {
   auth.searchParams.set("scope", SCOPES)
   auth.searchParams.set("code_challenge_method", "S256")
   auth.searchParams.set("code_challenge", codeChallenge)
-  auth.searchParams.set("state", "abcxyz123")
+  auth.searchParams.set("state", state)
   if (AUDIENCE) auth.searchParams.set("audience", AUDIENCE)
 
   await shell.openExternal(auth.toString())
