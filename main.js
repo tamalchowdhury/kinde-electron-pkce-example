@@ -3,6 +3,7 @@ require("dotenv").config()
 
 const { app, BrowserWindow, ipcMain, shell } = require("electron")
 const path = require("path")
+const os = require("os")
 const express = require("express")
 const keytar = require("keytar")
 const crypto = require("crypto")
@@ -23,7 +24,7 @@ if (!ISSUER || !CLIENT_ID) {
 }
 
 const SERVICE_NAME = "electron-kinde-pkce-sample"
-const ACCOUNT_NAME = "default"
+const ACCOUNT_NAME = os.userInfo().username
 
 const store = new Store({ name: "app-prefs" }) // not used yet, but kept if you need it
 
@@ -48,13 +49,9 @@ function challengeFromVerifier(v) {
 }
 
 function randomState(len = 12) {
-  // Node 16/18 compatible: base64 -> base64url, strip padding, slice
-  const bytes = crypto.randomBytes(Math.ceil((len * 3) / 4))
-  return bytes
-    .toString("base64")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/g, "")
+  return crypto
+    .randomBytes(Math.ceil((len * 3) / 4))
+    .toString("base64url")
     .slice(0, len)
 }
 
@@ -290,6 +287,21 @@ ipcMain.handle("auth:logout", async () => {
   try {
     await doLogout()
     return { ok: true }
+  } catch (e) {
+    return { ok: false, error: String(e) }
+  }
+})
+
+ipcMain.handle("auth:getSession", async () => {
+  try {
+    const tokens = await loadTokens()
+    if (!tokens) return { ok: true, signedIn: false }
+
+    // Optionally ensure access token is fresh (also proves the session is valid)
+    const access_token = await getValidAccessToken().catch(() => null)
+    const claims = decodeIdToken(tokens.id_token)
+
+    return { ok: true, signedIn: true, claims, access_token }
   } catch (e) {
     return { ok: false, error: String(e) }
   }
